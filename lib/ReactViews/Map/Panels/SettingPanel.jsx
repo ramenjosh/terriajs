@@ -1,137 +1,261 @@
-'use strict';
+"use strict";
 
-import React from 'react';
-import createReactClass from 'create-react-class';
-import PropTypes from 'prop-types';
-import classNames from 'classnames';
+import React from "react";
+import createReactClass from "create-react-class";
+import PropTypes from "prop-types";
+import classNames from "classnames";
+import Slider from "rc-slider";
 
-import ViewerMode from '../../../Models/ViewerMode';
-import ObserveModelMixin from '../../ObserveModelMixin';
-import MenuPanel from '../../StandardUserInterface/customizable/MenuPanel.jsx';
+import ViewerMode from "../../../Models/ViewerMode";
+import ObserveModelMixin from "../../ObserveModelMixin";
+import MenuPanel from "../../StandardUserInterface/customizable/MenuPanel.jsx";
 import Icon from "../../Icon.jsx";
 
-import Styles from './setting-panel.scss';
-import DropdownStyles from './panel.scss';
+import Styles from "./setting-panel.scss";
+import DropdownStyles from "./panel.scss";
+
+const viewerModeLabels = {
+  [ViewerMode.CesiumTerrain]: "3D Terrain",
+  [ViewerMode.CesiumEllipsoid]: "3D Smooth",
+  [ViewerMode.Leaflet]: "2D"
+};
+
+const qualityLabels = {
+  0: "Maximum performance, lower quality",
+  1: "Balanced performance & quality",
+  2: "Maximum quality, lower performance"
+};
 
 // The basemap and viewer setting panel
 const SettingPanel = createReactClass({
-    displayName: 'SettingPanel',
-    mixins: [ObserveModelMixin],
+  displayName: "SettingPanel",
+  mixins: [ObserveModelMixin],
 
-    propTypes: {
-        terria: PropTypes.object.isRequired,
-        viewerModes: PropTypes.array,
-        allBaseMaps: PropTypes.array.isRequired,
-        viewState: PropTypes.object.isRequired
-    },
+  propTypes: {
+    terria: PropTypes.object.isRequired,
+    allBaseMaps: PropTypes.array,
+    viewState: PropTypes.object.isRequired
+  },
 
-    getDefaultProps() {
-        return {
-            viewerModes: ['3D Terrain', '3D Smooth', '2D']
-        };
-    },
+  getInitialState() {
+    return {
+      activeMap: this.props.terria.baseMap
+        ? this.props.terria.baseMap.name
+        : "(None)"
+    };
+  },
 
-    getInitialState() {
-        return {
-            activeMap: this.props.terria.baseMap ? this.props.terria.baseMap.name : '(None)'
-        };
-    },
+  selectBaseMap(baseMap, event) {
+    event.stopPropagation();
+    this.props.terria.baseMap = baseMap.catalogItem;
+    this.props.terria.baseMapContrastColor = baseMap.contrastColor;
 
-    selectBaseMap(baseMap, event) {
-        event.stopPropagation();
-        this.props.terria.baseMap = baseMap.catalogItem;
-        this.props.terria.baseMapContrastColor = baseMap.contrastColor;
+    // We store the user's chosen basemap for future use, but it's up to the instance to decide
+    // whether to use that at start up.
+    this.props.terria.setLocalProperty("basemap", baseMap.catalogItem.name);
+  },
 
-        // We store the user's chosen basemap for future use, but it's up to the instance to decide
-        // whether to use that at start up.
-        this.props.terria.setLocalProperty('basemap', baseMap.catalogItem.name);
-    },
+  mouseEnterBaseMap(baseMap) {
+    this.setState({
+      activeMap: baseMap.catalogItem.name
+    });
+  },
 
-    mouseEnterBaseMap(baseMap) {
-        this.setState({
-            activeMap: baseMap.catalogItem.name
-        });
-    },
+  mouseLeaveBaseMap() {
+    this.setState({
+      activeMap: this.props.terria.baseMap
+        ? this.props.terria.baseMap.name
+        : "(None)"
+    });
+  },
 
-    mouseLeaveBaseMap() {
-        this.setState({
-            activeMap: this.props.terria.baseMap ? this.props.terria.baseMap.name : '(None)'
-        });
-    },
+  selectViewer(viewer, event) {
+    event.stopPropagation();
 
-    selectViewer(viewer, event) {
-        event.stopPropagation();
+    let newViewerMode;
+    switch (viewer) {
+      case 0:
+        newViewerMode = ViewerMode.CesiumTerrain;
+        break;
+      case 1:
+        newViewerMode = ViewerMode.CesiumEllipsoid;
+        break;
+      case 2:
+        newViewerMode = ViewerMode.Leaflet;
+        break;
+      default:
+        return;
+    }
+    this.props.terria.viewerMode = newViewerMode;
 
-        let newViewerMode;
-        switch (viewer) {
-            case 0:
-                newViewerMode = ViewerMode.CesiumTerrain;
-                break;
-            case 1:
-                newViewerMode = ViewerMode.CesiumEllipsoid;
-                break;
-            case 2:
-                newViewerMode = ViewerMode.Leaflet;
-                break;
-            default:
-                return;
-        }
-        this.props.terria.viewerMode = newViewerMode;
+    // We store the user's chosen viewer mode for future use.
+    this.props.terria.setLocalProperty("viewermode", newViewerMode);
+    this.props.terria.currentViewer.notifyRepaintRequired();
+  },
 
-        // We store the user's chosen viewer mode for future use.
-        this.props.terria.setLocalProperty('viewermode', newViewerMode);
-    },
+  render() {
+    const that = this;
+    const useNativeResolution = this.props.terria.useNativeResolution;
+    const currentViewer = this.props.terria.viewerMode;
+    const currentBaseMap = this.props.terria.baseMap
+      ? this.props.terria.baseMap.name
+      : "(None)";
 
-    render() {
-        const that = this;
-        const currentViewer = this.props.terria.viewerMode;
-        const currentBaseMap = this.props.terria.baseMap ? this.props.terria.baseMap.name : '(None)';
+    const nativeResolutionLabel = `Press to stop using ${
+      useNativeResolution ? "native" : "screen"
+    } resolution and start using ${
+      useNativeResolution ? "screen" : "native"
+    } resolution`;
 
-        const dropdownTheme = {
-            outer: Styles.settingPanel,
-            inner: Styles.dropdownInner,
-            btn: Styles.btnDropdown,
-            icon: 'sphere'
-        };
+    const dropdownTheme = {
+      outer: Styles.settingPanel,
+      inner: Styles.dropdownInner,
+      btn: Styles.btnDropdown,
+      icon: "map"
+    };
 
-        return (
-            <MenuPanel theme={dropdownTheme} btnTitle="Change view" btnText="Map" viewState={this.props.viewState}
-                       smallScreen={this.props.viewState.useSmallScreenInterface}>
-                <div className={classNames(Styles.viewer, DropdownStyles.section)}>
-                    <label className={DropdownStyles.heading}> Map View </label>
-                    <ul className={Styles.viewerSelector}>
-                        <For each="viewerMode" of={this.props.viewerModes} index="i">
-                            <li key={i} className={Styles.listItem}>
-                                <button onClick={that.selectViewer.bind(this, i)}
-                                        className={classNames(Styles.btnViewer, {[Styles.isActive]: i === currentViewer})}>
-                                    {viewerMode}
-                                </button>
-                            </li>
-                        </For>
-                    </ul>
-                </div>
-                <div className={classNames(Styles.baseMap, DropdownStyles.section)}>
-                    <label className={DropdownStyles.heading}> Base Map </label>
-                    <label className={DropdownStyles.subHeading}>{this.state.activeMap}</label>
-                    <ul className={Styles.baseMapSelector}>
-                        <For each="baseMap" index="i" of={this.props.allBaseMaps}>
-                            <li key={i} className={Styles.listItem}>
-                                <button
-                                    className={classNames(Styles.btnBaseMap, {[Styles.isActive]: baseMap.catalogItem.name === currentBaseMap })}
-                                    onClick={that.selectBaseMap.bind(this, baseMap)}
-                                    onMouseEnter={that.mouseEnterBaseMap.bind(this, baseMap)}
-                                    onMouseLeave={that.mouseLeaveBaseMap.bind(this, baseMap)}
-                                    onFocus={that.mouseEnterBaseMap.bind(this, baseMap)}>
-                                    {baseMap.catalogItem.name === currentBaseMap ? <Icon glyph={Icon.GLYPHS.selected }/>: null }
-                                    <img alt={baseMap.catalogItem.name} src={baseMap.image}/>
-                                </button>
-                            </li>
-                        </For>
-                    </ul>
-                </div>
-            </MenuPanel>
-        );
-    },
+    const viewerModes = [];
+
+    if (
+      this.props.terria.configParameters.useCesiumIonTerrain ||
+      this.props.terria.configParameters.cesiumTerrainUrl
+    ) {
+      viewerModes.push(ViewerMode.CesiumTerrain);
+    }
+
+    viewerModes.push(ViewerMode.CesiumEllipsoid, ViewerMode.Leaflet);
+
+    return (
+      <MenuPanel
+        theme={dropdownTheme}
+        btnTitle="Change view"
+        btnText="Map"
+        viewState={this.props.viewState}
+        smallScreen={this.props.viewState.useSmallScreenInterface}
+      >
+        <div className={classNames(Styles.viewer, DropdownStyles.section)}>
+          <label className={DropdownStyles.heading}> Map View </label>
+          <ul className={Styles.viewerSelector}>
+            <For each="viewerMode" of={viewerModes}>
+              <li key={viewerMode} className={Styles.listItem}>
+                <button
+                  onClick={that.selectViewer.bind(this, viewerMode)}
+                  className={classNames(Styles.btnViewer, {
+                    [Styles.isActive]: viewerMode === currentViewer
+                  })}
+                >
+                  {viewerModeLabels[viewerMode]}
+                </button>
+              </li>
+            </For>
+          </ul>
+        </div>
+        <div className={classNames(Styles.baseMap, DropdownStyles.section)}>
+          <label className={DropdownStyles.heading}> Base Map </label>
+          <label className={DropdownStyles.subHeading}>
+            {this.state.activeMap}
+          </label>
+          <ul className={Styles.baseMapSelector}>
+            <For each="baseMap" index="i" of={this.props.allBaseMaps}>
+              <li key={i} className={Styles.listItem}>
+                <button
+                  className={classNames(Styles.btnBaseMap, {
+                    [Styles.isActive]:
+                      baseMap.catalogItem.name === currentBaseMap
+                  })}
+                  onClick={that.selectBaseMap.bind(this, baseMap)}
+                  onMouseEnter={that.mouseEnterBaseMap.bind(this, baseMap)}
+                  onMouseLeave={that.mouseLeaveBaseMap.bind(this, baseMap)}
+                  onFocus={that.mouseEnterBaseMap.bind(this, baseMap)}
+                >
+                  {baseMap.catalogItem.name === currentBaseMap ? (
+                    <Icon glyph={Icon.GLYPHS.selected} />
+                  ) : null}
+                  <img alt={baseMap.catalogItem.name} src={baseMap.image} />
+                </button>
+              </li>
+            </For>
+          </ul>
+        </div>
+        <If condition={this.props.terria.viewerMode !== ViewerMode.Leaflet}>
+          <div className={DropdownStyles.section}>
+            <label className={DropdownStyles.heading}>Image Optimisation</label>
+            <section
+              className={Styles.nativeResolutionWrapper}
+              title={qualityLabels[this.props.terria.quality]}
+            >
+              <button
+                id="mapUseNativeResolution"
+                type="button"
+                onClick={() =>
+                  (this.props.terria.useNativeResolution = !useNativeResolution)
+                }
+                title={nativeResolutionLabel}
+                className={Styles.btnNativeResolution}
+              >
+                {useNativeResolution ? (
+                  <Icon glyph={Icon.GLYPHS.checkboxOn} />
+                ) : (
+                  <Icon glyph={Icon.GLYPHS.checkboxOff} />
+                )}
+              </button>
+              <label
+                title={nativeResolutionLabel}
+                htmlFor="mapUseNativeResolution"
+                className={classNames(
+                  DropdownStyles.subHeading,
+                  Styles.nativeResolutionHeader
+                )}
+              >
+                Use native device resolution
+              </label>
+            </section>
+            <label
+              htmlFor="mapQuality"
+              className={classNames(DropdownStyles.subHeading)}
+            >
+              Raster Map Quality:
+            </label>
+            <section
+              className={Styles.qualityWrapper}
+              title={qualityLabels[this.props.terria.quality]}
+            >
+              <label
+                className={classNames(
+                  DropdownStyles.subHeading,
+                  Styles.qualityLabel
+                )}
+              >
+                Quality
+              </label>
+              <Slider
+                id="mapMaximumScreenSpaceError"
+                className={Styles.opacitySlider}
+                min={1}
+                max={3}
+                step={0.1}
+                value={this.props.terria.baseMaximumScreenSpaceError}
+                onChange={val =>
+                  (this.props.terria.baseMaximumScreenSpaceError = val)
+                }
+                marks={{ 2: "" }}
+                // Awaiting https://github.com/react-component/slider/pull/420
+                // aria-valuetext={qualityLabels[this.props.terria.quality]}
+              />
+              <label
+                className={classNames(
+                  DropdownStyles.subHeading,
+                  Styles.qualityLabel
+                )}
+              >
+                Performance
+              </label>
+            </section>
+          </div>
+        </If>
+      </MenuPanel>
+    );
+  }
 });
 
 module.exports = SettingPanel;
